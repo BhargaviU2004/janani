@@ -1,0 +1,6 @@
+{
+  "name": "Janani - AI Perinatal Crisis Response",
+  "description": "Comprehensive perinatal health ecosystem with AI-powered rapid crisis response, nutrition planning, and document analysis for expectant and new mothers.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["AI Health Monitoring", "Crisis Response", "Medical Document Analysis"]
+}

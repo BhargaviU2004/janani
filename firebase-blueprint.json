@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User specific data including pregnancy details and emergency contacts",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "pregnancyStartDate": { "type": "string", "format": "date" },
+        "currentTrimester": { "type": "integer" },
+        "emergencyContacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "phone": { "type": "string" },
+              "relation": { "type": "string" }
+            }
+          }
+        },
+        "onboardingComplete": { "type": "boolean" },
+        "hospitalContact": { "type": "string" },
+        "isLaborWatchEnabled": { "type": "boolean" }
+      },
+      "required": ["uid", "email"]
+    },
+    "JournalEntry": {
+      "title": "Health Journal Entry",
+      "description": "Daily health journal with AI mood and risk analysis",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "mood": { "type": "string" },
+            "riskLevel": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+            "redFlags": { "type": "array", "items": { "type": "string" } },
+            "summary": { "type": "string" }
+          }
+        },
+        "isVoice": { "type": "boolean" }
+      },
+      "required": ["userId", "content", "timestamp"]
+    },
+    "MedicalReport": {
+      "title": "Medical Report",
+      "description": "Data extracted from medical reports, prescriptions, and ultrasounds",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "reportType": { "type": "string" },
+        "extractedData": { "type": "object" },
+        "imageUrl": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "milestones": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "timestamp"]
+    },
+    "EmergencyAlert": {
+      "title": "Emergency Alert",
+      "description": "Log of emergency alerts triggered",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "location": { "type": "object" },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Store users' personal information and pregnancy details"
+    },
+    "/users/{userId}/journal/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Store daily health journal entries"
+    },
+    "/users/{userId}/reports/{reportId}": {
+      "schema": "MedicalReport",
+      "description": "Store uploaded medical report analyses"
+    },
+    "/users/{userId}/alerts/{alertId}": {
+      "schema": "EmergencyAlert",
+      "description": "Store emergency alert logs"
+    }
+  }
+}

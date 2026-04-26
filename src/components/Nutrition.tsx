@@ -8,10 +8,13 @@ import {
   Clock, 
   CheckCircle2,
   RefreshCw,
-  Leaf
+  Leaf,
+  Youtube
 } from 'lucide-react';
 import { ai, MODELS } from '../lib/gemini';
 import { Type } from '@google/genai';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
 export default function Nutrition() {
   const { profile, updateProfile } = useAuth();
@@ -19,24 +22,55 @@ export default function Nutrition() {
   const [plan, setPlan] = useState<any>(null);
 
   const preferredLanguage = profile?.preferredLanguage || 'en';
+  const status = profile?.status || 'pregnant';
   const trimester = profile?.currentTrimester || 1;
 
   const fetchPlan = async () => {
     setLoading(true);
     try {
+      // Fetch latest mood from journal
+      let latestMood = "Normal";
+      try {
+        const journalSnap = await getDocs(query(
+          collection(db, 'users', profile?.uid || '', 'journal'),
+          orderBy('timestamp', 'desc'),
+          limit(1)
+        ));
+        if (!journalSnap.empty) {
+          latestMood = journalSnap.docs[0].data().analysis?.mood || "Normal";
+        }
+      } catch (e) {
+        console.error("Mood fetch failed", e);
+      }
+      
       const response = await ai.models.generateContent({
         model: MODELS.NUTRITION_PLANNER,
-        contents: `Create a comprehensive South Indian nutrition plan for a pregnant woman in Trimester ${trimester}. 
-        Focus strictly on local ingredients: Ragi, Murungai (Mugginge - Drumstick leaves), Methi (Menthya), lentils (Bele), and seasonal South Indian fruits. 
+        contents: `Create a diverse and varied South Indian nutrition plan. 
+        User Status: ${status === 'pregnant' ? `in Trimester ${trimester} of Pregnancy` : 'in Postpartum Recovery'}.
+        Latest Mood from Journal: ${latestMood}.
+        
+        ${status === 'postpartum' ? 'Focus on Galactagogues (Athe - milk boosting), healing, and energy for the new mother.' : ''}
+        
+        ADJUST DIET BASED ON EMOTIONS:
+        - If the mood is ANXIOUS/STRESSED: Suggest magnesium-rich foods (Banana, Spinach, Almonds) and calming herbal teas.
+        - If the mood is TIRED/EXHAUSTED: Suggest energy-boosting foods (Dates, Sprouted pulses, Fruit bowls).
+        - If the mood is SAD/LOW: Suggest comforting but healthy warm traditional dishes.
+        
+        South Indian Staples to include:
+        - Grains: Ragi, brown rice, red rice, oats, broken wheat.
+        - Greens: Murungai (Drumstick leaves), Methi (Menthya), Palak, Amaranth.
+        - Proteins: Lentils (Bele), sprouts, paneer, eggs (if applicable), nuts.
+        - Seasonal South Indian fruits and vegetables.
         
         CRITICAL: All response fields (focus, meals, recipeTip) MUST be in the ${preferredLanguage === 'kn' ? 'KANNADA language (ಕನ್ನಡ)' : 'ENGLISH language'}.
         
         You MUST provide specific recommendations for all four meal times: Breakfast, Lunch, Snack, and Dinner.
         Include:
-        1. Daily highlight (e.g. ${preferredLanguage === 'kn' ? 'Iron - ಕಬ್ಬಿನಾಂಶ, Calcium - ಕ್ಯಾಲ್ಸಿಯಂ' : 'Iron, Calcium'})
-        2. Detailed meal suggestions for each of the four categories in ${preferredLanguage === 'kn' ? 'Kannada' : 'English'}.
+        1. Daily highlight (e.g. ${preferredLanguage === 'kn' ? 'Vitamins & Minerals - ವಿಟಮಿನ್ ಮತ್ತು ಖನಿಜಗಳು' : 'Vitamins & Minerals'})
+        2. Detailed meal suggestions for each of the categories in ${preferredLanguage === 'kn' ? 'Kannada' : 'English'}.
         3. A simple South Indian "Recipe Tip" in ${preferredLanguage === 'kn' ? 'Kannada' : 'English'}.
-        Return a JSON object with all fields populated in ${preferredLanguage === 'kn' ? 'Kannada' : 'English'}.`,
+        4. A "videoQueries" object containing specific search terms for a YouTube recipe video for Breakfast, Lunch, and Dinner.
+        Return a JSON object.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -54,9 +88,18 @@ export default function Nutrition() {
                 required: ["breakfast", "lunch", "snack", "dinner"]
               },
               recipeTip: { type: Type.STRING },
-              nutritionalValue: { type: Type.STRING }
+              nutritionalValue: { type: Type.STRING },
+              videoQueries: {
+                type: Type.OBJECT,
+                properties: {
+                  breakfast: { type: Type.STRING },
+                  lunch: { type: Type.STRING },
+                  dinner: { type: Type.STRING }
+                },
+                required: ["breakfast", "lunch", "dinner"]
+              }
             },
-            required: ["focus", "meals", "recipeTip"]
+            required: ["focus", "meals", "recipeTip", "videoQueries"]
           }
         }
       });
@@ -71,14 +114,16 @@ export default function Nutrition() {
 
   useEffect(() => {
     fetchPlan();
-  }, [trimester, preferredLanguage]);
+  }, [trimester, preferredLanguage, status]);
 
   return (
     <div className="space-y-6 pb-12">
       <div className="flex justify-between items-center">
         <div>
           <h3 className="serif text-3xl text-[#5A5A40]">Nutrition Planner</h3>
-          <p className="text-gray-500 text-sm mt-1">Trimester {trimester} • South Indian Focus</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {status === 'pregnant' ? `Trimester ${trimester} • South Indian Focus` : 'Postpartum Recovery • South Indian Focus'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {/* Language Toggle */}
@@ -131,10 +176,29 @@ export default function Nutrition() {
 
           {/* Meals */}
           <div className="space-y-4">
-            <MealCard time="Breakfast" meal={plan.meals.breakfast} icon={<Clock className="text-blue-500" />} />
-            <MealCard time="Lunch" meal={plan.meals.lunch} icon={<Clock className="text-orange-500" />} />
-            <MealCard time="Snack" meal={plan.meals.snack} icon={<Clock className="text-purple-500" />} />
-            <MealCard time="Dinner" meal={plan.meals.dinner} icon={<Clock className="text-indigo-500" />} />
+            <MealCard 
+              time="Breakfast" 
+              meal={plan.meals.breakfast} 
+              icon={<Clock className="text-blue-500" />} 
+              videoQuery={plan.videoQueries.breakfast}
+            />
+            <MealCard 
+              time="Lunch" 
+              meal={plan.meals.lunch} 
+              icon={<Clock className="text-orange-500" />} 
+              videoQuery={plan.videoQueries.lunch}
+            />
+            <MealCard 
+              time="Snack" 
+              meal={plan.meals.snack} 
+              icon={<Clock className="text-purple-500" />} 
+            />
+            <MealCard 
+              time="Dinner" 
+              meal={plan.meals.dinner} 
+              icon={<Clock className="text-indigo-500" />} 
+              videoQuery={plan.videoQueries.dinner}
+            />
           </div>
 
           {/* Recipe Tip */}
@@ -157,19 +221,33 @@ export default function Nutrition() {
   );
 }
 
-function MealCard({ time, meal, icon }: { time: string, meal: string, icon: React.ReactNode }) {
+function MealCard({ time, meal, icon, videoQuery }: { time: string, meal: string, icon: React.ReactNode, videoQuery?: string }) {
   return (
     <motion.div 
       whileHover={{ scale: 1.01 }}
-      className="card-maternal !p-5 flex gap-4 items-center"
+      className="card-maternal !p-5 flex gap-4 items-center justify-between"
     >
-      <div className="bg-gray-50 p-3 rounded-2xl">
-        {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5' })}
+      <div className="flex gap-4 items-center flex-1">
+        <div className="bg-gray-50 p-3 rounded-2xl">
+          {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
+        </div>
+        <div>
+          <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{time}</h5>
+          <p className="text-sm font-semibold text-gray-700 leading-snug mt-0.5">{meal}</p>
+        </div>
       </div>
-      <div>
-        <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{time}</h5>
-        <p className="text-sm font-semibold text-gray-700 leading-snug mt-0.5">{meal}</p>
-      </div>
+      
+      {videoQuery && (
+        <a 
+          href={`https://www.youtube.com/results?search_query=${encodeURIComponent(videoQuery)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-red-50 text-red-600 p-2 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center group"
+          title="Watch Recipe Video"
+        >
+          <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        </a>
+      )}
     </motion.div>
   );
 }

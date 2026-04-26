@@ -97,14 +97,16 @@ export default function Journal() {
 
     try {
       // AI Analysis
+      const status = profile?.status || 'pregnant';
       const response = await ai.models.generateContent({
         model: MODELS.HEALTH_ANALYSIS,
         contents: content,
         config: {
           systemInstruction: `You are Janani AI, a perinatal health specialist. 
+          User is currently ${status === 'pregnant' ? 'PREGNANT' : 'POSTPARTUM'}.
           Analyze this journal entry for emotional and physical distress. 
           The entry may be in English, Kannada, or a mix.
-          Focus on red flags for PPD (Postpartum Depression), Preeclampsia, or other crises.
+          Focus on red flags for ${status === 'pregnant' ? 'PPD (Postpartum Depression) early signs, Preeclampsia, or physical discomfort' : 'PPD (Postpartum Depression), isolation, or physical recovery issues'}.
           Return a JSON object only. Summary should be in the user's preferred language (${preferredLanguage === 'kn' ? 'Kannada' : 'English'}).`,
           responseMimeType: "application/json",
           responseSchema: {
@@ -130,8 +132,10 @@ export default function Journal() {
         isVoice: false // Could distinguish later
       });
 
-      if (analysis.riskLevel === 'high' || analysis.riskLevel === 'critical') {
+      if (analysis.riskLevel === 'critical') {
         triggerCrisisAlert(analysis.summary, analysis.redFlags || []);
+      } else if (analysis.riskLevel === 'high') {
+        alert(`🚨 Warning: High-risk health indicators detected.\n\n${analysis.summary}\n\nPlease consult your healthcare provider or visit the nearest hospital.`);
       }
 
       setContent('');

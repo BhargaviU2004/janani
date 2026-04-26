@@ -9,12 +9,15 @@ import {
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-interface UserProfile {
+export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
   onboardingComplete: boolean;
+  status?: 'pregnant' | 'postpartum';
+  pregnancyCount?: '1st' | '2nd' | '3rd';
   pregnancyStartDate?: string;
+  deliveryDate?: string;
   currentTrimester?: number;
   emergencyContacts: { name: string; phone: string; relation: string; }[];
   hospitalContact?: string;
@@ -74,8 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log('Login popup was closed by the user.');
+        return;
+      }
+      throw error;
+    }
   };
 
   const logout = async () => {
@@ -93,8 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user) return;
     const docRef = doc(db, 'users', user.uid);
-    await setDoc(docRef, { ...profile, ...data }, { merge: true });
-    setProfile(prev => prev ? { ...prev, ...data } : null);
+    
+    // Sanitize data to remove undefined values which Firestore doesn't accept
+    const sanitizedData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
+
+    await setDoc(docRef, { ...profile, ...sanitizedData }, { merge: true });
+    setProfile(prev => prev ? { ...prev, ...sanitizedData } : null);
   };
 
   return (

@@ -64,17 +64,19 @@ export default function Reports() {
   const analyzeReport = async (base64: string, mimeType: string) => {
     setAnalyzing(true);
     try {
+      const status = profile?.status || 'pregnant';
       const response = await ai.models.generateContent({
         model: MODELS.REPORT_EXTRACTION,
         contents: [
           {
             text: `Review this medical document (Prescription/Report/Ultrasound). 
+            User is currently ${status === 'pregnant' ? 'PREGNANT' : 'POSTPARTUM'}.
             Extract key data points: 
             1. Report Type
-            2. Key metrics (e.g., Hb levels, BP, fetal weight)
+            2. Key metrics (e.g., Hb levels, BP, ${status === 'pregnant' ? 'fetal weight' : 'recovery metrics'})
             3. Medication schedule if any.
-            4. Pregnancy milestones reached.
-            5. Risk flags.
+            4. ${status === 'pregnant' ? 'Pregnancy milestonesReached' : 'Recovery milestones reached'}.
+            5. Risk flags ${status === 'postpartum' ? '(focus on PPD signs if mentioned, or physical healing)' : ''}.
             Return a JSON object.`
           },
           {
@@ -101,8 +103,10 @@ export default function Reports() {
 
       const analysis = JSON.parse(response.text || '{}');
 
-      if (analysis.riskLevel === 'high' || analysis.riskLevel === 'critical') {
+      if (analysis.riskLevel === 'critical') {
         triggerCrisisAlert(analysis.summary, analysis.riskFlags || []);
+      } else if (analysis.riskLevel === 'high') {
+        alert(`🚨 Medical Report Warning: High-risk indicators found.\n\n${analysis.summary}\n\nPlease share this with your doctor immediately.`);
       }
 
       await addDoc(collection(db, 'users', user.uid, 'reports'), {
